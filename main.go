@@ -10,9 +10,7 @@ cz-20151119
 import (
 	"database/sql"
 	"flag"
-	"github.com/VividCortex/godaemon"
 	"log"
-	"log/syslog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -38,6 +36,8 @@ const timeout = time.Second * 2
 var Bsize uint
 var Verbose bool
 var Dbh *sql.DB
+var Bs int
+var UserMap = make(map[string]string)
 
 func main() {
 	// options
@@ -48,12 +48,13 @@ func main() {
 	var conf string
 
 	flag.StringVar(&bind, "bind", ":8002", "locate ip and port")
-	flag.StringVar(&backend, "backend", "127.0.0.1:8003", "backend server ip and port")
+	flag.StringVar(&backend, "backend", "192.168.199.224:3306", "backend server ip and port")
 	flag.StringVar(&logTo, "logTo", "stdout", "stdout or syslog")
 	flag.UintVar(&buffer, "buffer", 4096, "buffer size")
+	flag.IntVar(&Bs, "bs", 5, "buffer size")
 	flag.BoolVar(&daemon, "daemon", false, "run as daemon process")
 	flag.BoolVar(&verbose, "verbose", false, "print verbose sql query")
-	flag.StringVar(&conf, "conf", "", "config file to verify database and record sql query")
+	flag.StringVar(&conf, "conf", "conf.cnf", "config file to verify database and record sql query")
 	flag.Parse()
 	Bsize = buffer
 	Verbose = verbose
@@ -61,6 +62,7 @@ func main() {
 	conf_fh, err := get_config(conf)
 	if err != nil {
 		log.Printf("Can't get config info, skip insert log to mysql...\n")
+		log.Printf(err.Error())
 	} else {
 	    backend_dsn, _ := get_backend_dsn(conf_fh)
 	    Dbh, err = dbh(backend_dsn)
@@ -71,17 +73,6 @@ func main() {
     }
 
 	log.SetOutput(os.Stdout)
-	if logTo == "syslog" {
-		w, err := syslog.New(syslog.LOG_INFO, "portproxy")
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.SetOutput(w)
-	}
-
-	if daemon == true {
-		godaemon.MakeDaemon(&godaemon.DaemonAttr{})
-	}
 
 	p := New(bind, backend, uint32(buffer))
 	log.Println("portproxy started.")

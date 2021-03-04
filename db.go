@@ -40,10 +40,11 @@ func ExecQuery(db *sql.DB, q string) (sql.Result, error) {
 func insertlog(db *sql.DB, t *query) bool {
 	insertSql := `
 	insert into query_log(bindport, client, client_port, server, server_port, sql_type, 
-	sql_string, create_time) values (%d, '%s', %d, '%s', %d, '%s', '%s', now())
+	sql_string, username, create_time) values (%d, '%s', %d, '%s', %d, '%s', '%s', '%s',now())
 	`
-	_, err := ExecQuery(db, fmt.Sprintf(insertSql, t.bindPort, t.client, t.cport, t.server, t.sport, t.sqlType, t.sqlString))
+	_, err := ExecQuery(db, fmt.Sprintf(insertSql, t.bindPort, t.client, t.cport, t.server, t.sport, t.sqlType, t.sqlString,t.user))
 	if err != nil {
+		log.Printf(err.Error())
 		return false
 	}
 	return true
