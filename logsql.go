@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"compress/zlib"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -48,7 +51,7 @@ type query struct {
 	sport     int64
 	sqlType   string
 	sqlString string
-	user string
+	user      string
 }
 
 func ipPortFromNetAddr(s string) (ip string, port int64) {
@@ -114,14 +117,14 @@ func sql_escape(s string) string {
 	return string(desc[0:j])
 }
 
-func isLogin(zzzz []byte) (isLogin bool){
+func isLogin(zzzz []byte) (isLogin bool) {
 	log.Println("isLogin")
 	isLogin = len(zzzz) == 23
-	if !isLogin{
+	if !isLogin {
 		return
 	}
-	for  _, b := range zzzz {
-		if b==0{
+	for _, b := range zzzz {
+		if b == 0 {
 			continue
 		} else {
 			isLogin = false
@@ -140,89 +143,110 @@ func proxyLog(src, dst *Conn) {
 	pos1 := 13
 	pos := 36
 	for {
+		var payload []byte
 		n, err := src.Read(buffer)
 		if err != nil {
-			return
+			log.Println(err.Error())
 		}
-
+		_, err = dst.Write(buffer[0:n])
 		if err != nil {
 			log.Println(err.Error())
 		}
 		user, ok := UserMap[sessionKey]
-		if !ok{
+		if ok {
+			sqlInfo.user = user
+		} else {
 			zzzz := buffer[pos1:pos]
 			if isLogin(zzzz) {
 				user := string(buffer[pos : pos+bytes.IndexByte(buffer[pos:], 0)])
 				UserMap[sessionKey] = user
 				sqlInfo.user = user
-				log.Println(user)
+				continue
 			}
-		} else{
-			sqlInfo.user = user
 		}
-		if n >= Bs {
-			var verboseStr string
-			//log.Printf("%s" , buffer[Bs:])
-			//log.Printf("%x" , buffer)
-			//log.Printf("%x" , buffer[:Bs])
-			switch buffer[Bs-1] {
+		compressDataSize := buffer[:3]
+		cZize := int(binary.LittleEndian.Uint16(compressDataSize))
+		if cZize == n-7 {
+			header := buffer[:7]
+			comprLength := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+			uncompressedLength := int(uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16)
+			// compressionSequence := uint8(header[3])
+			log.Printf("%x", buffer[:n])
+			comprData := buffer[7 : 7+comprLength]
+			if uncompressedLength == 0 {
+				payload = buffer[11:n]
+			} else {
+				log.Println(uncompressedLength)
+				log.Printf("%x",comprData)
+				var b bytes.Buffer
+				b.Write(comprData)
+				r, err := zlib.NewReader(&b)
+				if r != nil {
+					defer r.Close()
+				}
+				if err != nil {
+					log.Println(err.Error())
+				}
+				data := make([]byte, uncompressedLength)
+				lenRead := 0
+				for lenRead < uncompressedLength {
+					tmp := data[lenRead:]
+					n, err := r.Read(tmp)
+					lenRead += n
+					if err == io.EOF {
+						log.Printf("lenRead: %d", lenRead)
+						log.Printf("uncompressedLength: %d", uncompressedLength)
+						if lenRead < uncompressedLength {
+							log.Println(io.ErrUnexpectedEOF)
+						}
+					}
+					if err != nil {
+						log.Println(err.Error())
+					}
+				}
+				payload = append(payload, data...)[4:]
+			}
+		} else {
+			payload = buffer[4:n]
+		}
+
+		if true {
+			switch payload[0] {
 			case comQuit:
-				verboseStr = fmt.Sprintf("From %s To %s; Quit: %s\n", sqlInfo.client, sqlInfo.server, "user quit")
 				sqlInfo.sqlType = "Quit"
 			case comInitDB:
-				verboseStr = fmt.Sprintf("From %s To %s; schema: use %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Schema"
 			case comQuery:
-				verboseStr = fmt.Sprintf("From %s To %s; Query: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Query"
 			//case comFieldList:
-			//	verboseStr = log.Printf("From %s To %s; Table columns list: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 			//	sqlInfo.sqlType = "Table columns list"
 			case comCreateDB:
-				verboseStr = fmt.Sprintf("From %s To %s; CreateDB: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "CreateDB"
 			case comDropDB:
-				verboseStr = fmt.Sprintf("From %s To %s; DropDB: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "DropDB"
 			case comRefresh:
-				verboseStr = fmt.Sprintf("From %s To %s; Refresh: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Refresh"
 			case comStmtPrepare:
-				verboseStr = fmt.Sprintf("From %s To %s; Prepare Query: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Prepare Query"
 			case comStmtExecute:
-				verboseStr = fmt.Sprintf("From %s To %s; Prepare Args: %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Prepare Args"
 			case comProcessKill:
-				verboseStr = fmt.Sprintf("From %s To %s; Kill: kill conntion %s\n", sqlInfo.client, sqlInfo.server, string(buffer[Bs:n]))
 				sqlInfo.sqlType = "Kill"
 			default:
 			}
-
-			if Verbose {
-				log.Print(verboseStr)
-			}
-
 			if strings.EqualFold(sqlInfo.sqlType, "Quit") {
 				sqlInfo.sqlString = "user quit"
 			} else {
-				sqlInfo.sqlString = converToUnixLine(sql_escape(string(buffer[Bs:n])))
+				sqlInfo.sqlString = converToUnixLine(sql_escape(string(payload[1:])))
 			}
-			//log.Printf(sqlInfo.client)
-			//log.Printf(sqlInfo.server)
-			//log.Printf(sqlInfo.sqlType)
-			//log.Printf(sqlInfo.sqlString)
+			log.Printf(sqlInfo.client)
+			log.Printf(sqlInfo.server)
+			log.Printf(sqlInfo.sqlType)
+			log.Printf(sqlInfo.sqlString)
 			if !strings.EqualFold(sqlInfo.sqlType, "") && Dbh != nil {
-
 				//log.Printf("insertlog")
 				insertlog(Dbh, &sqlInfo)
 			}
-
-		}
-
-		_, err = dst.Write(buffer[0:n])
-		if err != nil {
-			return
 		}
 	}
 }
