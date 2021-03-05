@@ -171,13 +171,10 @@ func proxyLog(src, dst *Conn) {
 			comprLength := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 			uncompressedLength := int(uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16)
 			// compressionSequence := uint8(header[3])
-			log.Printf("%x", buffer[:n])
 			comprData := buffer[7 : 7+comprLength]
 			if uncompressedLength == 0 {
-				payload = buffer[11:n]
+				payload = buffer[7:n]
 			} else {
-				log.Println(uncompressedLength)
-				log.Printf("%x",comprData)
 				var b bytes.Buffer
 				b.Write(comprData)
 				r, err := zlib.NewReader(&b)
@@ -193,25 +190,28 @@ func proxyLog(src, dst *Conn) {
 					tmp := data[lenRead:]
 					n, err := r.Read(tmp)
 					lenRead += n
-					if err == io.EOF {
-						log.Printf("lenRead: %d", lenRead)
-						log.Printf("uncompressedLength: %d", uncompressedLength)
-						if lenRead < uncompressedLength {
-							log.Println(io.ErrUnexpectedEOF)
+					if err != nil {
+						if err == io.EOF {
+							if lenRead < uncompressedLength {
+								log.Println(io.ErrUnexpectedEOF)
+							}
+						} else {
+							log.Println(err.Error())
 						}
 					}
-					if err != nil {
-						log.Println(err.Error())
-					}
 				}
-				payload = append(payload, data...)[4:]
+				payload = append(payload, data...)
 			}
 		} else {
-			payload = buffer[4:n]
+			payload = buffer[:n]
 		}
+		dataBody :=payload[4:]
 
 		if true {
-			switch payload[0] {
+			cmd := dataBody[0]
+			args := dataBody[1:]
+			//log.Printf("%x", args)
+			switch  cmd{
 			case comQuit:
 				sqlInfo.sqlType = "Quit"
 			case comInitDB:
@@ -237,14 +237,13 @@ func proxyLog(src, dst *Conn) {
 			if strings.EqualFold(sqlInfo.sqlType, "Quit") {
 				sqlInfo.sqlString = "user quit"
 			} else {
-				sqlInfo.sqlString = converToUnixLine(sql_escape(string(payload[1:])))
+				sqlInfo.sqlString = converToUnixLine(sql_escape(string(args)))
 			}
-			log.Printf(sqlInfo.client)
-			log.Printf(sqlInfo.server)
-			log.Printf(sqlInfo.sqlType)
-			log.Printf(sqlInfo.sqlString)
+			//log.Printf(sqlInfo.client)
+			//log.Printf(sqlInfo.server)
+			//log.Printf(sqlInfo.sqlType)
+			//log.Printf(sqlInfo.sqlString)
 			if !strings.EqualFold(sqlInfo.sqlType, "") && Dbh != nil {
-				//log.Printf("insertlog")
 				insertlog(Dbh, &sqlInfo)
 			}
 		}
