@@ -77,3 +77,7 @@ func main() {
 	go p.Start()
 	waitSignal()
 }
+/*
+iptables -t nat -A PREROUTING -d 192.168.10.100 -p tcp -m tcp --dport 3306  -j DNAT --to-destination 192.168.10.29:8003
+iptables -t nat -A OUTPUT -d 192.168.10.100 -p tcp -m tcp --dport 3306  -j DNAT --to-destination 192.168.10.29:8003
+ */

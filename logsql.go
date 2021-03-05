@@ -145,12 +145,12 @@ func proxyLog(src, dst *Conn) {
 	for {
 		var payload []byte
 		n, err := src.Read(buffer)
-		if err != nil {
-			log.Println(err.Error())
+		if err != nil && err != io.EOF {
+			log.Printf("src.Read Error: %s", err.Error())
 		}
 		_, err = dst.Write(buffer[0:n])
 		if err != nil {
-			log.Println(err.Error())
+			log.Printf("dst.Write Error: %s", err.Error())
 		}
 		user, ok := UserMap[sessionKey]
 		if ok {
@@ -182,7 +182,7 @@ func proxyLog(src, dst *Conn) {
 					defer r.Close()
 				}
 				if err != nil {
-					log.Println(err.Error())
+					log.Printf("zlib.NewReader: %s", err.Error())
 				}
 				data := make([]byte, uncompressedLength)
 				lenRead := 0
@@ -191,12 +191,14 @@ func proxyLog(src, dst *Conn) {
 					n, err := r.Read(tmp)
 					lenRead += n
 					if err != nil {
+						log.Printf("lenRead: %d", lenRead)
+						log.Printf("uncompressedLength: %d", uncompressedLength)
 						if err == io.EOF {
 							if lenRead < uncompressedLength {
-								log.Println(io.ErrUnexpectedEOF)
+								log.Printf("ErrUnexpectedEOF: %s", io.ErrUnexpectedEOF)
 							}
 						} else {
-							log.Println(err.Error())
+							log.Printf("not EOF: %s", err.Error())
 						}
 					}
 				}
@@ -205,9 +207,9 @@ func proxyLog(src, dst *Conn) {
 		} else {
 			payload = buffer[:n]
 		}
-		dataBody :=payload[4:]
 
-		if true {
+		if len(payload)>4 {
+			dataBody :=payload[4:]
 			cmd := dataBody[0]
 			args := dataBody[1:]
 			//log.Printf("%x", args)
