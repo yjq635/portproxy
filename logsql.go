@@ -191,11 +191,9 @@ func proxyLog(src, dst *Conn) {
 					n, err := r.Read(tmp)
 					lenRead += n
 					if err != nil {
-						log.Printf("lenRead: %d", lenRead)
-						log.Printf("uncompressedLength: %d", uncompressedLength)
 						if err == io.EOF {
 							if lenRead < uncompressedLength {
-								log.Printf("ErrUnexpectedEOF: %s", io.ErrUnexpectedEOF)
+								log.Printf("lenRead: %d, uncompressedLength: %d,ErrUnexpectedEOF: %s", lenRead, uncompressedLength, io.ErrUnexpectedEOF)
 							}
 						} else {
 							log.Printf("not EOF: %s", err.Error())
