@@ -148,6 +148,9 @@ func proxyLog(src, dst *Conn) {
 			return
 		}
 		_, err = dst.Write(buffer[0:n])
+		if n< 5{
+			continue
+		}
 		if err != nil {
 			log.Printf("dst.Write Error: %s", err.Error())
 			return
