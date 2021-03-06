@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -39,6 +40,8 @@ const timeout = time.Second * 2
 var Bsize uint
 var Verbose bool
 var Dbh *sql.DB
+var serviceName = "mysql-proxy"
+var  yamlPath string
 
 type T struct {
 	Dsn string
@@ -47,6 +50,16 @@ type T struct {
 		Bind   string
 	}
 }
+func init() {
+	var projectConf string
+	if runtime.GOOS == "windows" {
+		projectConf = serviceName + ".yaml"
+	} else {
+		projectConf = "/etc/woda/modules/" + serviceName + "/" + serviceName + ".yaml"
+	}
+	flag.StringVar(&yamlPath, "c", projectConf, "yaml path: /etc/woda/xx.yaml")
+}
+
 
 func main() {
 	// options
@@ -54,7 +67,6 @@ func main() {
 	var buffer uint
 	var daemon bool
 	var verbose bool
-	var yamlPath string
 
 	flag.StringVar(&bind, "bind", ":8003", "locate ip and port")
 	flag.StringVar(&backend, "backend", "192.168.199.224:3306", "backend server ip and port")
@@ -62,7 +74,6 @@ func main() {
 	flag.UintVar(&buffer, "buffer", 4096, "buffer size")
 	flag.BoolVar(&daemon, "daemon", false, "run as daemon process")
 	flag.BoolVar(&verbose, "verbose", false, "print verbose sql query")
-	flag.StringVar(&yamlPath, "c", "mysql-proxy.yaml", "config file to verify database and record sql query")
 	flag.Parse()
 	Bsize = buffer
 	Verbose = verbose
