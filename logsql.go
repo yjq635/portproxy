@@ -150,6 +150,7 @@ func proxyLog(src, dst *Conn) {
 		_, err = dst.Write(buffer[0:n])
 		if err != nil {
 			log.Printf("dst.Write Error: %s", err.Error())
+			return
 		}
 		if sqlInfo.user == "" {
 			zzzz := buffer[pos1:pos]
