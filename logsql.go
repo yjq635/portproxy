@@ -143,8 +143,10 @@ func proxyLog(src, dst *Conn) {
 	for {
 		var payload []byte
 		n, err := src.Read(buffer)
-		if err != nil && err != io.EOF {
-			log.Printf("src.Read Error: %s", err.Error())
+		if err != nil {
+			if err != io.EOF{
+				log.Printf("src.Read Error: %s", err.Error())
+			}
 			return
 		}
 		if n< 5{
