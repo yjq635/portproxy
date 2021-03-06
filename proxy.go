@@ -58,7 +58,6 @@ func (t *Proxy) transport(conn net.Conn) {
 		log.Print(err)
 		return
 	}
-	defer conn2.Close()
 	connectTime := time.Now().Sub(start)
 	log.Printf("proxy: %s ==> %s", conn2.LocalAddr().String(),
 		conn2.RemoteAddr().String())

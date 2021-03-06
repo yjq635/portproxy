@@ -147,10 +147,10 @@ func proxyLog(src, dst *Conn) {
 			log.Printf("src.Read Error: %s", err.Error())
 			return
 		}
-		_, err = dst.Write(buffer[0:n])
 		if n< 5{
 			continue
 		}
+		_, err = dst.Write(buffer[0:n])
 		if err != nil {
 			log.Printf("dst.Write Error: %s", err.Error())
 			return
