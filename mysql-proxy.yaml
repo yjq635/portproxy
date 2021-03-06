@@ -1,0 +1,4 @@
+dsn: root:password@tcp(192.168.199.222:3306)/test?charset=utf8
+backends:
+  - server: 192.168.199.224:3306
+    bind: :8003

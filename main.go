@@ -10,6 +10,8 @@ cz-20151119
 import (
 	"database/sql"
 	"flag"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -37,7 +39,14 @@ const timeout = time.Second * 2
 var Bsize uint
 var Verbose bool
 var Dbh *sql.DB
-var UserMap = make(map[string]string)
+
+type T struct {
+	Dsn string
+	Backends [] struct {
+		Server string
+		Bind   string
+	}
+}
 
 func main() {
 	// options
@@ -45,7 +54,7 @@ func main() {
 	var buffer uint
 	var daemon bool
 	var verbose bool
-	var conf string
+	var yamlPath string
 
 	flag.StringVar(&bind, "bind", ":8003", "locate ip and port")
 	flag.StringVar(&backend, "backend", "192.168.199.224:3306", "backend server ip and port")
@@ -53,11 +62,11 @@ func main() {
 	flag.UintVar(&buffer, "buffer", 4096, "buffer size")
 	flag.BoolVar(&daemon, "daemon", false, "run as daemon process")
 	flag.BoolVar(&verbose, "verbose", false, "print verbose sql query")
-	flag.StringVar(&conf, "conf", "conf.cnf", "config file to verify database and record sql query")
+	flag.StringVar(&yamlPath, "c", "mysql-proxy.yaml", "config file to verify database and record sql query")
 	flag.Parse()
 	Bsize = buffer
 	Verbose = verbose
-
+/*
 	conf_fh, err := get_config(conf)
 	if err != nil {
 		log.Printf("Can't get config info, skip insert log to mysql...\n")
@@ -70,12 +79,35 @@ func main() {
 	    }
 	    defer Dbh.Close()
     }
-
+ */
 	log.SetOutput(os.Stdout)
+	m := T{}
+	data, err := ioutil.ReadFile(yamlPath)
+	if err != nil {
+		log.Printf("ioutil.ReadFile, error:%s", err)
+		return
+	}
+	log.Printf("yamlstr :%s", data)
+	err = yaml.Unmarshal([]byte(data), &m)
+	if err != nil {
+		log.Printf("yaml.Unmarshal error:%s",  err)
+		return
+	}
+	log.Printf("yaml:%s", m)
+	backend_dsn := m.Dsn
+	Dbh, err = dbh(backend_dsn)
+	if err != nil {
+		log.Printf("Can't get database handle, skip insert log to mysql...\n")
+	}
+	defer Dbh.Close()
 
-	p := New(bind, backend, uint32(buffer))
-	log.Println("portproxy started.")
-	go p.Start()
+	for _, backend := range m.Backends {
+		server := backend.Server
+		bind := backend.Bind
+		p := New(bind, server, uint32(buffer))
+		log.Println("portproxy started.")
+		go p.Start()
+	}
 	waitSignal()
 }
 /*
