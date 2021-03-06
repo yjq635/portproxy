@@ -24,6 +24,7 @@ func waitSignal() {
 	for sig := range sigChan {
 		if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 			log.Printf("terminated by signal %v\n", sig)
+			os.Exit(0)
 		} else {
 			log.Printf("received signal: %v, ignore\n", sig)
 		}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -138,7 +137,6 @@ func proxyLog(src, dst *Conn) {
 	var sqlInfo query
 	sqlInfo.client, sqlInfo.cport = ipPortFromNetAddr(src.conn.RemoteAddr().String())
 	sqlInfo.server, sqlInfo.sport = ipPortFromNetAddr(dst.conn.RemoteAddr().String())
-	sessionKey := fmt.Sprintf("%s:%s->%s:%s", sqlInfo.client, sqlInfo.cport, sqlInfo.server, sqlInfo.sport)
 	_, sqlInfo.bindPort = ipPortFromNetAddr(src.conn.LocalAddr().String())
 	pos1 := 13
 	pos := 36
@@ -147,19 +145,16 @@ func proxyLog(src, dst *Conn) {
 		n, err := src.Read(buffer)
 		if err != nil && err != io.EOF {
 			log.Printf("src.Read Error: %s", err.Error())
+			return
 		}
 		_, err = dst.Write(buffer[0:n])
 		if err != nil {
 			log.Printf("dst.Write Error: %s", err.Error())
 		}
-		user, ok := UserMap[sessionKey]
-		if ok {
-			sqlInfo.user = user
-		} else {
+		if sqlInfo.user == "" {
 			zzzz := buffer[pos1:pos]
 			if isLogin(zzzz) {
 				user := string(buffer[pos : pos+bytes.IndexByte(buffer[pos:], 0)])
-				UserMap[sessionKey] = user
 				sqlInfo.user = user
 				continue
 			}
