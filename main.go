@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -111,12 +112,18 @@ func main() {
 		log.Printf("Can't get database handle, skip insert log to mysql...\n")
 	}
 	defer Dbh.Close()
+	forword_server_ip :="192.168.10.29"
 
 	for _, backend := range m.Backends {
 		server := backend.Server
 		bind := backend.Bind
 		p := New(bind, server, uint32(buffer))
+		s2 := strings.Split(server, ":")
+		server_ip := s2[0]
+		server_port := s2[1]
 		log.Println("portproxy started.")
+		log.Printf("iptables -t nat -A PREROUTING -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
+		log.Printf("iptables -t nat -A OUTPUT -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
 		go p.Start()
 	}
 	waitSignal()
