@@ -122,7 +122,7 @@ func main() {
 		server_ip := s2[0]
 		server_port := s2[1]
 		log.Println("portproxy started.")
-		log.Printf("iptables -t nat -A PREROUTING -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
+		log.Printf("iptables -t nat -A PREROUTING -i tun0 -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
 		log.Printf("iptables -t nat -A OUTPUT -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
 		go p.Start()
 	}
