@@ -229,6 +229,8 @@ func proxyLog(src, dst *Conn) {
 				sqlInfo.sqlType = "Schema"
 			case comQuery:
 				sqlInfo.sqlType = "Query"
+			//case comPing:
+			//	continue
 			//case comFieldList:
 			//	sqlInfo.sqlType = "Table columns list"
 			case comCreateDB:
@@ -244,6 +246,8 @@ func proxyLog(src, dst *Conn) {
 			case comProcessKill:
 				sqlInfo.sqlType = "Kill"
 			default:
+				Log.Infof("not handler data:%x", buffer[:n])
+				continue
 			}
 			if strings.EqualFold(sqlInfo.sqlType, "Quit") {
 				sqlInfo.sqlString = "user quit"
