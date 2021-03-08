@@ -134,7 +134,12 @@ func getLoginUser(buffer []byte) (user string, err error) {
 		err = errors.New("第一个包不是auth包")
 		return
 	}
-	user = string(buffer[pos : pos+bytes.IndexByte(buffer[pos:], 0)])
+	//Log.Infof("%x", buffer)
+	userEnd := bytes.IndexByte(buffer[pos:], 0)
+	Log.Info(userEnd)
+	if userEnd>0{
+		user = string(buffer[pos : pos+userEnd])
+	}
 	return
 }
 
@@ -246,7 +251,7 @@ func proxyLog(src, dst *Conn) {
 			case comProcessKill:
 				sqlInfo.sqlType = "Kill"
 			default:
-				Log.Infof("not handler data:%x", buffer[:n])
+				Log.Infof("%s not handler data:%x", src.conn.RemoteAddr().String(),buffer[:n])
 				continue
 			}
 			if strings.EqualFold(sqlInfo.sqlType, "Quit") {
