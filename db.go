@@ -44,7 +44,7 @@ func insertlog(db *sql.DB, t *query) bool {
 	`
 	_, err := ExecQuery(db, fmt.Sprintf(insertSql, t.bindPort, t.client, t.cport, t.server, t.sport, t.sqlType, t.sqlString,t.user))
 	if err != nil {
-		log.Printf(err.Error())
+		Log.Errorf("insert sql error %s",err.Error())
 		return false
 	}
 	return true
