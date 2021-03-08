@@ -10,6 +10,9 @@ cz-20151119
 import (
 	"database/sql"
 	"flag"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
@@ -21,16 +24,65 @@ import (
 	"time"
 )
 
+func initLog() *zap.SugaredLogger {
+	hook := lumberjack.Logger{
+		Filename:   "./logs/package.log", // 日志文件路径
+		MaxSize:    10,                   // 每个日志文件保存的最大尺寸 单位：M
+		MaxBackups: 5,                    // 日志文件最多保存多少个备份
+		MaxAge:     7,                    // 文件最多保存多少天
+		Compress:   true,                 // 是否压缩, 压缩后1M约占20Kb
+	}
+
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "time",
+		LevelKey:       "level",
+		CallerKey:      "caller",
+		NameKey:        "logger",
+		MessageKey:     "msg",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,  // 小写编码器
+		EncodeTime:     zapcore.ISO8601TimeEncoder,     // ISO8601 UTC 时间格式
+		EncodeDuration: zapcore.SecondsDurationEncoder, //
+	}
+
+	// 设置日志级别
+	atomicLevel := zap.NewAtomicLevel()
+	atomicLevel.SetLevel(zap.InfoLevel)
+
+	_ = zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoderConfig),                                        // 编码器配置
+		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(&hook)), // 打印到控制台和文件
+		atomicLevel, // 日志级别
+	)
+	config := zap.Config{
+		Level:       atomicLevel,
+		Development: false,
+		Sampling: &zap.SamplingConfig{
+			Initial:    100,
+			Thereafter: 100,
+		},
+		Encoding:         "console",
+		EncoderConfig:    zap.NewProductionEncoderConfig(),
+		OutputPaths:      []string{"stderr"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+	logger,_ := config.Build()
+	sugar := logger.Sugar()
+
+	logger.Info("log 初始化成功")
+	return sugar
+}
+
 //ignore signal
 func waitSignal() {
 	var sigChan = make(chan os.Signal, 1)
 	signal.Notify(sigChan)
 	for sig := range sigChan {
 		if sig == syscall.SIGINT || sig == syscall.SIGTERM {
-			log.Printf("terminated by signal %v\n", sig)
+			Log.Infof("terminated by signal %v\n", sig)
 			os.Exit(0)
 		} else {
-			log.Printf("received signal: %v, ignore\n", sig)
+			Log.Infof("received signal: %v, ignore\n", sig)
 		}
 	}
 }
@@ -43,6 +95,7 @@ var Verbose bool
 var Dbh *sql.DB
 var serviceName = "mysql-proxy"
 var  yamlPath string
+var Log = initLog()
 
 type T struct {
 	Dsn string
@@ -78,38 +131,22 @@ func main() {
 	flag.Parse()
 	Bsize = buffer
 	Verbose = verbose
-/*
-	conf_fh, err := get_config(conf)
-	if err != nil {
-		log.Printf("Can't get config info, skip insert log to mysql...\n")
-		log.Printf(err.Error())
-	} else {
-	    backend_dsn, _ := get_backend_dsn(conf_fh)
-	    Dbh, err = dbh(backend_dsn)
-    	if err != nil {
-	    	log.Printf("Can't get database handle, skip insert log to mysql...\n")
-	    }
-	    defer Dbh.Close()
-    }
- */
 	log.SetOutput(os.Stdout)
 	m := T{}
 	data, err := ioutil.ReadFile(yamlPath)
 	if err != nil {
-		log.Printf("ioutil.ReadFile, error:%s", err)
+		Log.Infof("ioutil.ReadFile, error:%s", err)
 		return
 	}
-	log.Printf("yamlstr :%s", data)
 	err = yaml.Unmarshal([]byte(data), &m)
 	if err != nil {
-		log.Printf("yaml.Unmarshal error:%s",  err)
+		Log.Infof("yaml.Unmarshal error:%s",  err)
 		return
 	}
-	log.Printf("yaml:%s", m)
 	backend_dsn := m.Dsn
 	Dbh, err = dbh(backend_dsn)
 	if err != nil {
-		log.Printf("Can't get database handle, skip insert log to mysql...\n")
+		Log.Infof("Can't get database handle, skip insert log to mysql...\n")
 	}
 	defer Dbh.Close()
 	forword_server_ip :="192.168.10.29"
@@ -121,9 +158,9 @@ func main() {
 		s2 := strings.Split(server, ":")
 		server_ip := s2[0]
 		server_port := s2[1]
-		log.Println("portproxy started.")
-		log.Printf("iptables -t nat -A PREROUTING -i tun0 -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
-		log.Printf("iptables -t nat -A OUTPUT -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
+		Log.Info("portproxy started.")
+		Log.Infof("iptables -t nat -A PREROUTING -i tun0 -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
+		Log.Infof("iptables -t nat -A OUTPUT -d %s -p tcp -m tcp --dport %s  -j DNAT --to-destination %s%s", server_ip, server_port, forword_server_ip, bind)
 		go p.Start()
 	}
 	waitSignal()

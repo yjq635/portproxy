@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
+	"errors"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 )
@@ -116,12 +116,13 @@ func sql_escape(s string) string {
 	return string(desc[0:j])
 }
 
-func isLogin(zzzz []byte) (isLogin bool) {
-	log.Println("isLogin")
-	isLogin = len(zzzz) == 23
-	if !isLogin {
-		return
-	}
+
+func getLoginUser(buffer []byte) (user string, err error) {
+	pos1 := 13
+	pos := 36
+	zzzz := buffer[pos1:pos]
+	Log.Info("isLogin")
+	isLogin := len(zzzz) == 23
 	for _, b := range zzzz {
 		if b == 0 {
 			continue
@@ -129,6 +130,11 @@ func isLogin(zzzz []byte) (isLogin bool) {
 			isLogin = false
 		}
 	}
+	if !isLogin {
+		err = errors.New("第一个包不是auth包")
+		return
+	}
+	user = string(buffer[pos : pos+bytes.IndexByte(buffer[pos:], 0)])
 	return
 }
 
@@ -138,14 +144,27 @@ func proxyLog(src, dst *Conn) {
 	sqlInfo.client, sqlInfo.cport = ipPortFromNetAddr(src.conn.RemoteAddr().String())
 	sqlInfo.server, sqlInfo.sport = ipPortFromNetAddr(dst.conn.RemoteAddr().String())
 	_, sqlInfo.bindPort = ipPortFromNetAddr(src.conn.LocalAddr().String())
-	pos1 := 13
-	pos := 36
+
+	n, err := src.Read(buffer)
+	if err != nil{
+		Log.Infof("src.Read auth Error: %s", err.Error())
+	}
+	_, err = dst.Write(buffer[0:n])
+	if err != nil{
+		Log.Infof("src.Write auth Error: %s", err.Error())
+	}
+	sqlInfo.user, err = getLoginUser(buffer[:n])
+	if err != nil{
+		Log.Info(err.Error())
+		return
+	}
+
 	for {
 		var payload []byte
 		n, err := src.Read(buffer)
 		if err != nil {
 			if err != io.EOF{
-				log.Printf("src.Read Error: %s", err.Error())
+				Log.Infof("src.Read Error: %s", err.Error())
 			}
 			return
 		}
@@ -154,16 +173,8 @@ func proxyLog(src, dst *Conn) {
 		}
 		_, err = dst.Write(buffer[0:n])
 		if err != nil {
-			log.Printf("dst.Write Error: %s", err.Error())
+			Log.Infof("dst.Write Error: %s", err.Error())
 			return
-		}
-		if sqlInfo.user == "" {
-			zzzz := buffer[pos1:pos]
-			if isLogin(zzzz) {
-				user := string(buffer[pos : pos+bytes.IndexByte(buffer[pos:], 0)])
-				sqlInfo.user = user
-				continue
-			}
 		}
 		compressDataSize := buffer[:3]
 		cZize := int(binary.LittleEndian.Uint16(compressDataSize))
@@ -183,7 +194,7 @@ func proxyLog(src, dst *Conn) {
 					defer r.Close()
 				}
 				if err != nil {
-					log.Printf("zlib.NewReader: %s", err.Error())
+					Log.Infof("zlib.NewReader: %s", err.Error())
 				}
 				data := make([]byte, uncompressedLength)
 				lenRead := 0
@@ -194,10 +205,10 @@ func proxyLog(src, dst *Conn) {
 					if err != nil {
 						if err == io.EOF {
 							if lenRead < uncompressedLength {
-								log.Printf("lenRead: %d, uncompressedLength: %d,ErrUnexpectedEOF: %s", lenRead, uncompressedLength, io.ErrUnexpectedEOF)
+								Log.Infof("lenRead: %d, uncompressedLength: %d,ErrUnexpectedEOF: %s", lenRead, uncompressedLength, io.ErrUnexpectedEOF)
 							}
 						} else {
-							log.Printf("not EOF: %s", err.Error())
+							Log.Infof("not EOF: %s", err.Error())
 						}
 					}
 				}
@@ -211,7 +222,6 @@ func proxyLog(src, dst *Conn) {
 			dataBody :=payload[4:]
 			cmd := dataBody[0]
 			args := dataBody[1:]
-			//log.Printf("%x", args)
 			switch  cmd{
 			case comQuit:
 				sqlInfo.sqlType = "Quit"
@@ -240,10 +250,9 @@ func proxyLog(src, dst *Conn) {
 			} else {
 				sqlInfo.sqlString = converToUnixLine(sql_escape(string(args)))
 			}
-			//log.Printf(sqlInfo.client)
-			//log.Printf(sqlInfo.server)
-			//log.Printf(sqlInfo.sqlType)
-			//log.Printf(sqlInfo.sqlString)
+			if sqlInfo.sqlString == ""{
+				Log.Infof("%x", buffer[:n])
+			}
 			if !strings.EqualFold(sqlInfo.sqlType, "") && Dbh != nil {
 				insertlog(Dbh, &sqlInfo)
 			}
