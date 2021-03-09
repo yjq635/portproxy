@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -143,23 +144,82 @@ func getLoginUser(buffer []byte) (user string, err error) {
 	}
 	return
 }
+func MinInt(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+func ReadN(conn *Conn, n int) ([]byte, error) {
+	readBytes := make([]byte, n)
+	tmpBytes := make([]byte, n) // todo reset?
+
+	for i := 0; i < n; {
+		readN, err := conn.Read(tmpBytes)
+		if err != nil {
+			return nil, fmt.Errorf("Reading %v+%v: %s", readBytes, tmpBytes, err)
+		}
+		copy(readBytes[i:], tmpBytes[:MinInt(n-i, readN)])
+		i += readN
+	}
+
+	if n != len(readBytes) {
+		panic(fmt.Sprintf("Expected to read '%d' bytes but got '%d'", n, len(readBytes)))
+	}
+
+	return readBytes, nil
+}
+
+func ReadPacket(conn *Conn) ([]byte, error) {
+	headerBytes, err := ReadN(conn, 4)
+	if err != nil {
+		return nil, fmt.Errorf("reading header: %s", err)
+	}
+	length := int(uint32(headerBytes[0]) | uint32(headerBytes[1])<<8 | uint32(headerBytes[2])<<16)
+	if length > 0 {
+		dataBytes, err := ReadN(conn, length)
+		if err != nil {
+			return nil, fmt.Errorf("reading data: %s", err)
+		}
+		rBytes := append(headerBytes, dataBytes...)
+		return rBytes, nil
+	}
+
+	return nil, fmt.Errorf("unexpected length")
+}
+
+func readOnePacket(conn *Conn) ([]byte, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(conn, header[:]); err != nil {
+		return nil, err
+	}
+	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	data := make([]byte, length)
+	if _, err := io.ReadFull(conn, data); err != nil {
+		return nil, err
+	}
+	rBytes := append(header[:], data...)
+	return rBytes, nil
+}
 
 func proxyLog(src, dst *Conn) {
-	buffer := make([]byte, Bsize)
+
 	var sqlInfo query
 	sqlInfo.client, sqlInfo.cport = ipPortFromNetAddr(src.conn.RemoteAddr().String())
 	sqlInfo.server, sqlInfo.sport = ipPortFromNetAddr(dst.conn.RemoteAddr().String())
 	_, sqlInfo.bindPort = ipPortFromNetAddr(src.conn.LocalAddr().String())
 
-	n, err := src.Read(buffer)
+	//buffer := make([]byte, Bsize)
+	//n, err := src.Read(buffer)
+	buffer,err := readOnePacket(src)
 	if err != nil{
 		Log.Infof("src.Read auth Error: %s", err.Error())
 	}
-	_, err = dst.Write(buffer[0:n])
+	_, err = dst.Write(buffer)
 	if err != nil{
 		Log.Infof("src.Write auth Error: %s", err.Error())
 	}
-	sqlInfo.user, err = getLoginUser(buffer[:n])
+	sqlInfo.user, err = getLoginUser(buffer)
 	if err != nil{
 		Log.Info(err.Error())
 		return
@@ -167,21 +227,19 @@ func proxyLog(src, dst *Conn) {
 
 	for {
 		var payload []byte
-		n, err := src.Read(buffer)
+		buffer,err := readOnePacket(src)
 		if err != nil {
 			if err != io.EOF{
 				Log.Infof("src.Read Error: %s", err.Error())
 			}
 			return
 		}
-		if n< 5{
-			continue
-		}
-		_, err = dst.Write(buffer[0:n])
+		_, err = dst.Write(buffer)
 		if err != nil {
 			Log.Infof("dst.Write Error: %s", err.Error())
 			return
 		}
+		n := len(buffer)
 		compressDataSize := buffer[:3]
 		cZize := int(binary.LittleEndian.Uint16(compressDataSize))
 		if cZize == n-7 {
