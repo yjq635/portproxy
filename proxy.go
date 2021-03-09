@@ -43,8 +43,8 @@ func (t *Proxy) pipe(dst, src *Conn, c chan int64, tag string) {
 		proxyLog(src, dst)
 		c <- 0
 	} else {
+		/*
 		buf := make([]byte, Bsize)
-		//n, err := io.CopyBuffer(dst, src, buffer)
 		var written int64
 		var err error
 		nr, er := src.Read(buf)
@@ -52,15 +52,18 @@ func (t *Proxy) pipe(dst, src *Conn, c chan int64, tag string) {
 			Log.Errorf("%s", er)
 		}
 		Log.Infof("handshake package:%x", buf[0:nr])
-		//Log.Infof("%d", buf[25:27])
-		//flags := uint32(binary.LittleEndian.Uint16(buf[25:27]))
-		//Log.Info(flags)
-		//Log.Info(flags&ClientSSL)
-		//buf[26] = 247
-		//Log.Infof("%d", buf[30:32])
-		//buf[30] = 15
-		//buf[31] = 160
+		 */
+		/*
+		startOffset := 20
+		flage_start := bytes.IndexByte(buf[startOffset:], 0)
+		Log.Info(flage_start+startOffset)
+		Log.Infof("%x", buf[flage_start+startOffset+1:flage_start+startOffset+3])
+		Log.Infof("%x", buf[flage_start+startOffset+6:flage_start+startOffset+8])
+		buf[flage_start+startOffset+2] = 247
+		buf[flage_start+startOffset+7] = 129
 		Log.Infof("changed handshake package:%x", buf[0:nr])
+		 */
+		/*
 		_, ew := dst.Write(buf[0:nr])
 
 		if ew != nil{
@@ -90,10 +93,12 @@ func (t *Proxy) pipe(dst, src *Conn, c chan int64, tag string) {
 				break
 			}
 		}
+		 */
+		n, err := io.Copy(dst, src)
 		if err != nil {
 			log.Print(err)
 		}
-		c <- written
+		c <- n
 	}
 }
 
