@@ -118,12 +118,14 @@ func sql_escape(s string) string {
 }
 
 
-func getLoginUser(buffer []byte) (user string, err error) {
+func getLoginUser(buffer []byte) (user string,compress bool, err error) {
 	pos1 := 13
 	pos := 36
 	zzzz := buffer[pos1:pos]
 	Log.Infof("auth package:%x", buffer)
 	Log.Info("isLogin")
+	clientFlag := buffer[4]
+	compress = clientFlag&32>0
 	isLogin := len(zzzz) == 23
 	for _, b := range zzzz {
 		if b == 0 {
@@ -188,12 +190,15 @@ func ReadPacket(conn *Conn) ([]byte, error) {
 	return nil, fmt.Errorf("unexpected length")
 }
 
-func readOnePacket(conn *Conn) ([]byte, error) {
+func readOnePacket(conn *Conn, compress bool) ([]byte, error) {
 	var header [4]byte
 	if _, err := io.ReadFull(conn, header[:]); err != nil {
 		return nil, err
 	}
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if compress{
+		length +=3
+	}
 	data := make([]byte, length)
 	if _, err := io.ReadFull(conn, data); err != nil {
 		return nil, err
@@ -211,7 +216,7 @@ func proxyLog(src, dst *Conn) {
 
 	//buffer := make([]byte, Bsize)
 	//n, err := src.Read(buffer)
-	buffer,err := readOnePacket(src)
+	buffer,err := readOnePacket(src, false)
 	if err != nil{
 		Log.Infof("src.Read auth Error: %s", err.Error())
 	}
@@ -219,7 +224,8 @@ func proxyLog(src, dst *Conn) {
 	if err != nil{
 		Log.Infof("src.Write auth Error: %s", err.Error())
 	}
-	sqlInfo.user, err = getLoginUser(buffer)
+	user,compress, err := getLoginUser(buffer)
+	sqlInfo.user = user
 	if err != nil{
 		Log.Info(err.Error())
 		return
@@ -227,7 +233,7 @@ func proxyLog(src, dst *Conn) {
 
 	for {
 		var payload []byte
-		buffer,err := readOnePacket(src)
+		buffer,err := readOnePacket(src, compress)
 		if err != nil {
 			if err != io.EOF{
 				Log.Infof("src.Read Error: %s", err.Error())
@@ -242,10 +248,14 @@ func proxyLog(src, dst *Conn) {
 		n := len(buffer)
 		compressDataSize := buffer[:3]
 		cZize := int(binary.LittleEndian.Uint16(compressDataSize))
+		Log.Infof("n:%d", n)
+		Log.Infof("cZize:%d", cZize)
 		if cZize == n-7 {
 			header := buffer[:7]
 			comprLength := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+			Log.Infof("comprLength:%d", comprLength)
 			uncompressedLength := int(uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16)
+			Log.Infof("uncompressedLength:%d", uncompressedLength)
 			// compressionSequence := uint8(header[3])
 			comprData := buffer[7 : 7+comprLength]
 			if uncompressedLength == 0 {
