@@ -43,11 +43,57 @@ func (t *Proxy) pipe(dst, src *Conn, c chan int64, tag string) {
 		proxyLog(src, dst)
 		c <- 0
 	} else {
-		n, err := io.Copy(dst, src)
+		buf := make([]byte, Bsize)
+		//n, err := io.CopyBuffer(dst, src, buffer)
+		var written int64
+		var err error
+		nr, er := src.Read(buf)
+		if er != nil{
+			Log.Errorf("%s", er)
+		}
+		Log.Infof("handshake package:%x", buf[0:nr])
+		//Log.Infof("%d", buf[25:27])
+		//flags := uint32(binary.LittleEndian.Uint16(buf[25:27]))
+		//Log.Info(flags)
+		//Log.Info(flags&ClientSSL)
+		buf[26] = 247
+		//Log.Infof("%d", buf[30:32])
+		//buf[30] = 15
+		//buf[31] = 160
+		Log.Infof("changed handshake package:%x", buf[0:nr])
+		_, ew := dst.Write(buf[0:nr])
+
+		if ew != nil{
+			Log.Errorf("%s", ew)
+		}
+		for {
+			nr, er := src.Read(buf)
+			if nr > 0 {
+				//Log.Infof("%x", buf[:nr])
+				nw, ew := dst.Write(buf[0:nr])
+				if nw > 0 {
+					written += int64(nw)
+				}
+				if ew != nil {
+					err = ew
+					break
+				}
+				if nr != nw {
+					err = io.ErrShortWrite
+					break
+				}
+			}
+			if er != nil {
+				if er != io.EOF {
+					err = er
+				}
+				break
+			}
+		}
 		if err != nil {
 			log.Print(err)
 		}
-		c <- n
+		c <- written
 	}
 }
 
@@ -59,7 +105,7 @@ func (t *Proxy) transport(conn net.Conn) {
 		return
 	}
 	connectTime := time.Now().Sub(start)
-	log.Printf("proxy: %s ==> %s", conn2.LocalAddr().String(),
+	Log.Infof("proxy: %s ==> %s", conn2.LocalAddr().String(),
 		conn2.RemoteAddr().String())
 	start = time.Now()
 	readChan := make(chan int64)
@@ -95,7 +141,7 @@ func (t *Proxy) Start() {
 			log.Println("accept:", err)
 			continue
 		}
-		log.Printf("client: %s ==> %s", conn.RemoteAddr().String(),
+		Log.Infof("client: %s ==> %s", conn.RemoteAddr().String(),
 			conn.LocalAddr().String())
 		go t.transport(conn)
 	}

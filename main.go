@@ -120,6 +120,48 @@ func init() {
 	}
 	flag.StringVar(&yamlPath, "c", projectConf, "yaml path: /etc/woda/xx.yaml")
 }
+const (
+	ClientLongPassword uint32 = 1 << iota
+	ClientFoundRows
+	ClientLongFlag
+	ClientConnectWithDB
+	ClientNoSchema
+	ClientCompress
+	ClientODBC
+	ClientLocalFiles
+	ClientIgnoreSpace
+	ClientProtocol41
+	ClientInteractive
+	ClientSSL
+	ClientIgnoreSigpipe
+	ClientTransactions
+	ClientReserved
+	ClientSecureConnection
+	ClientMultiStatements
+	ClientMultiResults
+	ClientPSMultiResults
+	ClientPluginAuth
+	ClientConnectAtts
+	ClientPluginAuthLenencClientData
+)
+func init1(){
+
+	var capabilityFlags uint32 = 512 | 8 | 524288
+	Log.Info(ClientPluginAuth)
+	Log.Info(ClientSSL)
+	const defaultCapability = ClientLongPassword | ClientLongFlag |
+		ClientConnectWithDB | ClientProtocol41 |
+		ClientTransactions | ClientSecureConnection | ClientFoundRows |
+		ClientMultiStatements | ClientMultiResults | ClientLocalFiles |
+		ClientConnectAtts | ClientPluginAuth | ClientInteractive
+	Log.Info(capabilityFlags)
+	Log.Infof("defaultCapability: %d",defaultCapability)
+	capability := defaultCapability
+	capability |= ClientSSL
+	Log.Infof("|ClientSSL: %d",capability)
+	capability &= ClientSSL
+	Log.Infof("&ClientSSL: %d",capability)
+}
 
 
 func main() {

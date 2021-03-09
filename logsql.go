@@ -121,6 +121,7 @@ func getLoginUser(buffer []byte) (user string, err error) {
 	pos1 := 13
 	pos := 36
 	zzzz := buffer[pos1:pos]
+	Log.Infof("auth package:%x", buffer)
 	Log.Info("isLogin")
 	isLogin := len(zzzz) == 23
 	for _, b := range zzzz {
@@ -136,7 +137,7 @@ func getLoginUser(buffer []byte) (user string, err error) {
 	}
 	//Log.Infof("%x", buffer)
 	userEnd := bytes.IndexByte(buffer[pos:], 0)
-	Log.Info(userEnd)
+	// Log.Info(userEnd)
 	if userEnd>0{
 		user = string(buffer[pos : pos+userEnd])
 	}
