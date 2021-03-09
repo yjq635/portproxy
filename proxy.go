@@ -56,7 +56,7 @@ func (t *Proxy) pipe(dst, src *Conn, c chan int64, tag string) {
 		//flags := uint32(binary.LittleEndian.Uint16(buf[25:27]))
 		//Log.Info(flags)
 		//Log.Info(flags&ClientSSL)
-		buf[26] = 247
+		//buf[26] = 247
 		//Log.Infof("%d", buf[30:32])
 		//buf[30] = 15
 		//buf[31] = 160
