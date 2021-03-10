@@ -303,8 +303,8 @@ func proxyLog(src, dst *Conn) {
 				sqlInfo.sqlType = "Schema"
 			case comQuery:
 				sqlInfo.sqlType = "Query"
-			//case comPing:
-			//	continue
+			case comPing:
+				continue
 			//case comFieldList:
 			//	sqlInfo.sqlType = "Table columns list"
 			case comCreateDB:
